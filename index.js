@@ -1,7 +1,11 @@
 const pg = require('pg');
 const client = new pg.Client('postgress://localhost/cool_cars_db');
+const morgan = require('morgan');
 const express = require('express');
+const { error } = require('console');
 const app = express();
+app.use(morgan("dev"));
+app.use(express.json());
 
 app.get('/api/hypercars', async(req, res, next)=> {
     try {
@@ -15,6 +19,77 @@ app.get('/api/hypercars', async(req, res, next)=> {
         next(error);
     }
 });
+
+app.get('/api/hypercars/:id', async(req, res, next)=> {
+    try {
+        const SQL = `
+            SELECT *
+            FROM hypercars
+            WHERE id = $1
+        `;
+        console.log(req);
+        console.log(req.params);
+        const response = await client.query(SQL, [req.params.id]);
+        if(response.rows.length === 0) {
+            throw new Error("ID does not exist")
+        }
+        res.send(response.rows);      
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.delete('/api/hypercars/:id', async(req, res, next)=> {
+    try {
+        const SQL = `
+            DELETE
+            FROM hypercars
+            WHERE id = $1
+        `;
+        const response = await client.query(SQL, [req.params.id]);
+        res.send(response.rows);
+    } catch (error) {
+        next(error)
+    }
+});
+
+app.post('/api/hypercars', async(req, res, next)=> {
+    try {
+        const SQL = `
+            INSERT INTO hypercars(make, model, horsepower)
+            VALUES($1, $2, $3)
+            RETURNING *
+        `;
+        const response = await client.query(SQL, [req.body.make, req.body.model, req.body.horsepower]);
+        res.send(response.rows);
+    } catch (error) {
+        next(error);
+    } 
+});
+
+app.put('/api/hypercars/:id', async(req, res, next)=> {
+    try {
+        const SQL = `
+            UPDATE hypercars
+            SET make = $1, model = $2, horsepower = $3
+            WHERE id = $4
+            RETURNING * 
+        `;
+        const response = await client.query(SQL, [req.body.make, req.body.model, req.body.horsepower, req.params.id]);
+        res.send(response.rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.use('*', (req, res, next)=> {
+    res.status(404).send("Invalid Route");
+});
+
+app.use((err, req, res, next)=> {
+    console.log('error handler');
+    res.status(500).send(err.message);
+}); 
 
 const setup = async()=> {
     await client.connect();
